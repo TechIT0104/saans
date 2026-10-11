@@ -61,6 +61,8 @@ const T = {
     haze: "Haze", seen: "Seen", estNote: "Estimated from outdoor air, ventilation and the sources seen. It is not a sensor reading.",
     now: "Now", seeMap: "See the community map", burning: "Burning", dust: "Dust", industry: "Industry", traffic: "Traffic", indoorOnly: "Indoor",
     scanFailed: "Scan failed", clear: "clear", hazy: "hazy", heavy: "heavy",
+    aqiRange: "AQI across your region now", legendSources: "Dots: pollution sources found by people's scans",
+    legendGrid: "Squares: live forecast AQI",
   },
   hi: {
     welcomePlace: "आपकी हवा, आसान भाषा में", welcomeCat: "शुरू करने के लिए लोकेशन दें",
@@ -90,6 +92,8 @@ const T = {
     haze: "धुंध", seen: "दिखा", estNote: "बाहर की हवा, हवादारी और दिखे स्रोतों से अनुमान। यह सेंसर की रीडिंग नहीं है।",
     now: "अभी", seeMap: "कम्युनिटी नक्शा देखें", burning: "जलाना", dust: "धूल", industry: "उद्योग", traffic: "ट्रैफ़िक", indoorOnly: "घर के अंदर",
     scanFailed: "स्कैन नहीं हो पाया", clear: "साफ़", hazy: "धुंधला", heavy: "घना",
+    aqiRange: "अभी आपके इलाके में AQI", legendSources: "बिंदु: लोगों के स्कैन में मिले प्रदूषण स्रोत",
+    legendGrid: "वर्ग: अभी का पूर्वानुमानित AQI",
   },
 };
 
@@ -432,24 +436,47 @@ async function loadMap() {
     L.control.zoom({ position: "bottomright" }).addTo(map);
     layer = L.layerGroup().addTo(map);
   }
-  $("#legend").innerHTML = ["burning", "dust", "industry", "traffic", "indoor"]
-    .map((k) => `<span><i style="background:${SRC_COLORS[k]}"></i>${t(k === "indoor" ? "indoorOnly" : k)}</span>`).join("");
+  $("#legend").innerHTML = `<div class="legend-title">${t("legendSources")}</div>` + ["burning", "dust", "industry", "traffic", "indoor"]
+    .map((k) => `<span><i style="background:${SRC_COLORS[k]}"></i>${t(k === "indoor" ? "indoorOnly" : k)}</span>`).join("") +
+    `<div class="legend-title">${t("legendGrid")}</div>` + Object.entries(COLORS).map(([c, v]) => `<span><i class="sq" style="background:${v}"></i>${esc(catLabel(c))}</span>`).join("");
   setTimeout(() => map.invalidateSize(), 60);
-  if (state.lat != null) map.setView([state.lat, state.lon], 13);
+  if (state.lat != null) map.setView([state.lat, state.lon], 10);
   if (!Object.keys(state.sources).length) state.sources = await fetch("/api/sources").then((r) => r.json());
-  const reports = await fetch("/api/reports?days=30").then((r) => r.json());
   layer.clearLayers();
+
+  // 1. Live AQI field: forecast AQI on a grid around you, so the regional picture is always visible.
+  let gridNote = "";
+  if (state.lat != null) {
+    try {
+      const g = await fetch(`/api/aqi-grid?lat=${state.lat}&lon=${state.lon}`).then((r) => r.json());
+      const h = g.step / 2;
+      g.cells.forEach((c) => {
+        if (c.aqi == null) return;
+        L.rectangle([[c.lat - h, c.lon - h], [c.lat + h, c.lon + h]], { stroke: false, fillColor: COLORS[c.category], fillOpacity: 0.5, interactive: true })
+          .bindTooltip(`AQI ${c.aqi} · ${esc(catLabel(c.category))}`, { direction: "top" }).addTo(layer);
+        L.marker([c.lat, c.lon], { interactive: false, icon: L.divIcon({ className: "aqi-label", html: `${c.aqi}`, iconSize: [36, 18] }) }).addTo(layer);
+      });
+      const vals = g.cells.map((c) => c.aqi).filter((v) => v != null);
+      gridNote = `<div class="glass"><b>${Math.min(...vals)}–${Math.max(...vals)}</b><span>${t("aqiRange")}</span></div>`;
+    } catch (e) {}
+  }
+
+  // 2. Citizen reports: one marker per pollution source found, so every type shows up.
+  const reports = await fetch("/api/reports?days=30").then((r) => r.json());
   const counts = {};
   reports.forEach((r) => {
-    const groups = r.sources.map((s) => SRC_GROUP[s] || "indoor");
-    new Set(groups).forEach((g) => (counts[g] = (counts[g] || 0) + 1));
-    const g = ["burning", "industry", "dust", "traffic", "indoor"].find((x) => groups.includes(x)) || "other";
-    const names = r.sources.map((s) => (state.sources[s] ? (lang === "hi" ? state.sources[s].hi : state.sources[s].en) : s)).join(", ");
-    L.circleMarker([r.lat, r.lon], { radius: 9, color: "#fff", weight: 2.5, fillColor: SRC_COLORS[g], fillOpacity: 0.95 })
-      .bindPopup(`<b>${esc(names)}</b><br>${new Date(r.ts * 1000).toLocaleString(locale())}${r.aqi ? `<br>AQI ${r.aqi}` : ""}`).addTo(layer);
+    const types = [...new Set(r.sources)];
+    types.forEach((s, k) => {
+      const grp = SRC_GROUP[s] || "indoor";
+      counts[grp] = (counts[grp] || 0) + 1;
+      const ang = (k / Math.max(1, types.length)) * 2 * Math.PI, off = types.length > 1 ? 0.012 : 0;
+      const name = state.sources[s] ? (lang === "hi" ? state.sources[s].hi : state.sources[s].en) : s;
+      L.circleMarker([r.lat + Math.sin(ang) * off, r.lon + Math.cos(ang) * off], { radius: 8, color: "#fff", weight: 2.5, fillColor: SRC_COLORS[grp], fillOpacity: 0.95 })
+        .bindPopup(`<b>${esc(name)}</b><br>${new Date(r.ts * 1000).toLocaleString(locale())}${r.aqi ? `<br>AQI ${r.aqi}` : ""}`).addTo(layer);
+    });
   });
-  $("#mapStats").innerHTML = `<div class="glass"><b>${reports.length}</b><span>${t("reports")} · ${t("lastDays")}</span></div>` +
-    ["burning", "dust", "industry", "traffic"].filter((g) => counts[g]).map((g) => `<div class="glass"><b>${counts[g]}</b><span>${t(g)}</span></div>`).join("");
+  $("#mapStats").innerHTML = gridNote + `<div class="glass"><b>${reports.length}</b><span>${t("reports")} · ${t("lastDays")}</span></div>` +
+    ["burning", "dust", "industry", "traffic", "indoor"].filter((g) => counts[g]).map((g) => `<div class="glass"><b>${counts[g]}</b><span>${t(g === "indoor" ? "indoorOnly" : g)}</span></div>`).join("");
 }
 
 hydrateIcons();

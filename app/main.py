@@ -216,6 +216,25 @@ async def api_scan(
     }
 
 
+@app.get("/api/aqi-grid")
+async def api_aqi_grid(lat: float, lon: float, n: int = 7, step: float = 0.15):
+    """Forecast AQI on an n x n grid around a point, so the map shows how air varies across the region."""
+    half = n // 2
+    pts = [(round(lat + (r - half) * step, 4), round(lon + (c - half) * step, 4)) for r in range(n) for c in range(n)]
+    import httpx
+    async with httpx.AsyncClient(timeout=25) as client:
+        res = (await client.get(airmod.AQ_URL, params={
+            "latitude": ",".join(str(p[0]) for p in pts), "longitude": ",".join(str(p[1]) for p in pts),
+            "current": "pm2_5,pm10", "timezone": "Asia/Kolkata"})).json()
+    res = res if isinstance(res, list) else [res]
+    cells = []
+    for (la, lo), r in zip(pts, res):
+        cur = r.get("current", {})
+        a = airmod.naqi(cur.get("pm2_5"), cur.get("pm10"))
+        cells.append({"lat": la, "lon": lo, "aqi": a, "category": airmod.category(a)})
+    return {"step": step, "cells": cells}
+
+
 @app.get("/api/reports")
 async def api_reports(days: int = 30):
     return await asyncio.to_thread(store.list_reports, days)

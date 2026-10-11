@@ -240,3 +240,9 @@ textarea { width: 100%; min-height: 230px; border: 0; border-radius: 14px; paddi
 
 .leaflet-tile-pane { filter: saturate(.55) contrast(.95) brightness(1.04); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .leaflet-tile-pane { filter: invert(.92) hue-rotate(180deg) saturate(.4) brightness(.9); } }
+
+.legend { display: block; }
+.legend span { display: inline-block; margin: 0 12px 6px 0; }
+.legend-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; opacity: .9; margin: 10px 0 6px; }
+.legend i.sq { border-radius: 3px; }
+.aqi-label { font: 700 11px/18px var(--font); color: #1c1c1e; text-align: center; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
