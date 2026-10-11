@@ -170,7 +170,7 @@ function renderSlots() {
   $("#slots").querySelectorAll("input").forEach((inp) => (inp.onchange = () => {
     const f = inp.files[0];
     if (!f) return;
-    state.photos[+inp.dataset.slot] = { file: f, url: URL.createObjectURL(f), label: labels[+inp.dataset.slot] };
+    state.photos[+inp.dataset.slot] = { file: f, url: URL.createObjectURL(f), label: labels[+inp.dataset.slot], setting: +inp.dataset.slot >= 4 ? "indoor" : "outdoor" };
     renderSlots(); updateScanBtn();
   }));
   $("#slots").querySelectorAll("[data-rm]").forEach((b) => (b.onclick = (e) => {
@@ -202,6 +202,7 @@ $("#scanBtn").onclick = async () => {
   for (const p of chosen) fd.append("files", await shrink(p.file), "photo.jpg");
   fd.append("lat", state.lat); fd.append("lon", state.lon); fd.append("lang", lang);
   fd.append("members", [...state.members].join(","));
+  fd.append("settings", chosen.map((p) => p.setting).join(","));
   state.sent = chosen;
   $("#scanBtn").disabled = true;
   $("#scanResult").hidden = true;

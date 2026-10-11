@@ -4,10 +4,12 @@ then write the family's summary and the complaint letter.
 Model is configurable (SAANS_VISION_MODEL / SAANS_TEXT_MODEL); default is Amazon Nova.
 Structured output is enforced with a forced tool call whose input schema is the result we want.
 """
+import base64
 import json
 import os
 
 import boto3
+import httpx
 from botocore.config import Config
 
 from .knowledge import SOURCES
@@ -15,6 +17,9 @@ from .knowledge import SOURCES
 REGION = os.environ.get("AWS_REGION", "ap-south-1")
 VISION_MODEL = os.environ.get("SAANS_VISION_MODEL", "apac.amazon.nova-pro-v1:0")
 TEXT_MODEL = os.environ.get("SAANS_TEXT_MODEL", "apac.amazon.nova-lite-v1:0")
+# "gpu": Qwen2.5-VL on our own GPU (gpu_service/vl_server.py, reached through an SSH tunnel). "bedrock": Amazon Bedrock.
+BACKEND = os.environ.get("SAANS_LLM_BACKEND", "gpu")
+GPU_URL = os.environ.get("SAANS_GPU_URL", "http://127.0.0.1:9000")
 
 _client = None
 
@@ -91,16 +96,35 @@ def _tool_input(resp, name):
     raise ValueError("model returned no structured result")
 
 
-def analyse_photos(jpegs: list[bytes], smoke_hints: dict) -> dict:
+def _gpu(prompt: str, jpegs=(), max_new_tokens=900) -> dict:
+    r = httpx.post(GPU_URL + "/generate", timeout=180, json={
+        "prompt": prompt, "max_new_tokens": max_new_tokens,
+        "images": [base64.b64encode(j).decode() for j in jpegs]})
+    r.raise_for_status()
+    return r.json()["result"]
+
+
+def _schema_text(tool):
+    return json.dumps(tool["toolSpec"]["inputSchema"]["json"], ensure_ascii=False)
+
+
+def analyse_photos(jpegs: list[bytes], smoke_hints: dict, settings=None) -> dict:
     parts = []
     for i, boxes in smoke_hints.items():
         if boxes:
             parts.append("photo %s: %s" % (i, ", ".join("%s %.2f" % (b["label"], b["confidence"]) for b in boxes)))
     hints = "; ".join(parts) or "none"
+    prompt = SCAN_PROMPT.format(n=len(jpegs), hints=hints)
+    if settings:
+        prompt += "\nThe user labelled the photos: " + ", ".join(f"photo {i} = {v}" for i, v in enumerate(settings)) + "."
+    if BACKEND == "gpu":
+        out = _gpu(prompt.replace("Call report_scan with your findings.", "Reply with ONLY a JSON object matching this JSON schema:\n" + _schema_text(SCAN_TOOL)), jpegs)
+        out["sources"] = [s for s in out.get("sources", []) if s.get("type") in SOURCES and float(s.get("confidence", 0)) >= 0.4]
+        return out
     content = []
     for i, j in enumerate(jpegs):
         content += [{"text": f"Photo {i}:"}, _image_block(j)]
-    content.append({"text": SCAN_PROMPT.format(n=len(jpegs), hints=hints)})
+    content.append({"text": prompt})
     resp = client().converse(
         modelId=VISION_MODEL,
         messages=[{"role": "user", "content": content}],
@@ -139,6 +163,8 @@ Data (JSON): {json.dumps(context, ensure_ascii=False)}
 - summary: what is happening and the 2 most important things to do today.
 - complaint_body: only if an outdoor violation was found. Address it to "The Municipal Commissioner / State Pollution Control Board". Include the location (lat/lon and map link), date and time, what was seen, the rule it violates (use the 'law' text given), and ask for inspection and action. Sign as "A resident (via Saans)". Otherwise empty string.
 Call write_plan."""
+    if BACKEND == "gpu":
+        return _gpu(prompt.replace("Call write_plan.", "Reply with ONLY a JSON object matching this JSON schema:\n" + _schema_text(PLAN_TOOL)), max_new_tokens=700)
     resp = client().converse(
         modelId=TEXT_MODEL,
         messages=[{"role": "user", "content": [{"text": prompt}]}],

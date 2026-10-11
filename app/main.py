@@ -78,7 +78,7 @@ def _actions(ranked: list, aqi, has_indoor: bool, members: list, purifier: bool)
 async def api_scan(
     files: List[UploadFile] = File(...),
     lat: float = Form(...), lon: float = Form(...),
-    lang: str = Form("en"), members: str = Form(""),
+    lang: str = Form("en"), members: str = Form(""), settings: str = Form(""),
 ):
     if not 1 <= len(files) <= 6:
         raise HTTPException(400, "Send 1 to 6 photos.")
@@ -92,11 +92,12 @@ async def api_scan(
 
     ai_ok = True
     try:
-        scene = await asyncio.to_thread(llm.analyse_photos, jpegs, smoke)
+        scene = await asyncio.to_thread(llm.analyse_photos, jpegs, smoke, [x for x in settings.split(",") if x] or None)
     except Exception as e:
         log.exception("vision llm")
         ai_ok = False
-        scene = {"photos": [{"index": i, "setting": "outdoor", "scene": "", "visible_haze": "none"} for i in range(len(imgs))],
+        slot_settings = [x for x in settings.split(",") if x]
+        scene = {"photos": [{"index": i, "setting": slot_settings[i] if i < len(slot_settings) else "outdoor", "scene": "", "visible_haze": "none"} for i in range(len(imgs))],
                  "sources": [], "ventilation": "unknown", "air_purifier_visible": False, "notes": f"AI scene analysis unavailable: {e}"}
     # Smoke our detector is confident about counts even if the scene model missed it.
     seen_types = {s["type"] for s in scene["sources"]}
