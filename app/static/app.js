@@ -25,6 +25,9 @@ const ICONS = {
   mail: P('<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="m4 7 8 6 8-6"/>'),
   chat: P('<path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12Z"/>'),
   check: P('<path d="m5 12.5 4.5 4.5L19 7.5"/>'),
+  satellite: P('<path d="m13 7 4 4M7.5 11.5l5-5 5 5-5 5z"/><path d="m5 14 5 5M3 16.5l4.5 4.5M16 3l5 5"/><path d="M18 14a4 4 0 0 1-4 4"/>'),
+  cigarette: P('<rect x="2.5" y="13" width="15" height="4" rx="1"/><path d="M17.5 13v4M20 13v4M18.5 10c0-1.5-1.5-1.5-1.5-3s1.5-1.5 1.5-3M21 10c0-1.5-1.5-1.5-1.5-3"/>'),
+  sliders: P('<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>'),
 };
 function hydrateIcons(root = document) {
   root.querySelectorAll("[data-icon]").forEach((el) => { el.innerHTML = ICONS[el.dataset.icon] || ""; });
@@ -62,7 +65,15 @@ const T = {
     now: "Now", seeMap: "See the community map", burning: "Burning", dust: "Dust", industry: "Industry", traffic: "Traffic", indoorOnly: "Indoor",
     scanFailed: "Scan failed", clear: "clear", hazy: "hazy", heavy: "heavy",
     aqiRange: "AQI across your region now", legendSources: "Dots: pollution sources found by people's scans",
-    legendGrid: "Squares: live forecast AQI",
+    legendGrid: "Squares: live forecast AQI (one per 40 km model cell)",
+    smokeTitle: "Smoke watch · NASA satellites, last 24 h", firesUpwind: "fires upwind of you",
+    smokeLine: (w, s, d, e) => `Wind is coming from the ${w} at ${s} km/h. Smoke from these fires (median ${d} km away) can reach you in about ${e} hours.`,
+    smokeCalm: "No fires are upwind of you right now.", firesNear: (n, r) => `${n} active fires detected within ${r} km.`,
+    risk_high: "High risk", risk_medium: "Medium risk", risk_low: "Low risk", seeFires: "See the fires on the map",
+    cigDay: (c) => `Breathing this air for a day ≈ ${c} cigarettes`, cigRoom: (c) => `≈ ${c} cigarettes a day`,
+    legendFires: "Satellite fires (last 24 h)", fireUp: "Upwind of you", fireOther: "Other fires", cone: "Where your air is coming from",
+    whatIf: "What if you…", wiRemove: "Remove", wiOpen: "Open the windows", wiFilter: "Run a DIY air filter",
+    wiWas: (a, b) => `was ${a}–${b}`, firesUpCard: "Fires upwind",
   },
   hi: {
     welcomePlace: "आपकी हवा, आसान भाषा में", welcomeCat: "शुरू करने के लिए लोकेशन दें",
@@ -93,7 +104,15 @@ const T = {
     now: "अभी", seeMap: "कम्युनिटी नक्शा देखें", burning: "जलाना", dust: "धूल", industry: "उद्योग", traffic: "ट्रैफ़िक", indoorOnly: "घर के अंदर",
     scanFailed: "स्कैन नहीं हो पाया", clear: "साफ़", hazy: "धुंधला", heavy: "घना",
     aqiRange: "अभी आपके इलाके में AQI", legendSources: "बिंदु: लोगों के स्कैन में मिले प्रदूषण स्रोत",
-    legendGrid: "वर्ग: अभी का पूर्वानुमानित AQI",
+    legendGrid: "वर्ग: अभी का पूर्वानुमानित AQI (40 किमी का एक खाना)",
+    smokeTitle: "धुआँ निगरानी · NASA सैटेलाइट, पिछले 24 घंटे", firesUpwind: "आग आपकी हवा की दिशा में",
+    smokeLine: (w, s, d, e) => `हवा ${w} से ${s} किमी/घंटा की रफ़्तार से आ रही है। इन आगों (औसतन ${d} किमी दूर) का धुआँ लगभग ${e} घंटे में आप तक पहुँच सकता है।`,
+    smokeCalm: "अभी आपकी हवा की दिशा में कोई आग नहीं है।", firesNear: (n, r) => `${r} किमी के अंदर ${n} सक्रिय आग मिलीं।`,
+    risk_high: "ज़्यादा ख़तरा", risk_medium: "मध्यम ख़तरा", risk_low: "कम ख़तरा", seeFires: "नक्शे पर आग देखें",
+    cigDay: (c) => `एक दिन यह हवा साँस में लेना ≈ ${c} सिगरेट`, cigRoom: (c) => `≈ ${c} सिगरेट रोज़`,
+    legendFires: "सैटेलाइट से दिखी आग (24 घंटे)", fireUp: "आपकी हवा की दिशा में", fireOther: "बाकी आग", cone: "आपकी हवा कहाँ से आ रही है",
+    whatIf: "अगर आप…", wiRemove: "हटाएँ", wiOpen: "खिड़कियाँ खोलें", wiFilter: "DIY एयर फ़िल्टर चलाएँ",
+    wiWas: (a, b) => `पहले ${a}–${b}`, firesUpCard: "हवा की दिशा में आग",
   },
 };
 
@@ -110,7 +129,11 @@ const SLOT_ICONS = ["up", "right", "down", "left", "home", "flame"];
 let lang = "en";
 try { lang = localStorage.getItem("saans-lang") || "en"; } catch (e) {}
 const state = { lat: null, lon: null, place: "", air: null, photos: [], members: new Set(), result: null, sources: {} };
-const t = (k) => (T[lang][k] ?? T.en[k] ?? k);
+const t = (k, ...args) => { const v = T[lang][k] ?? T.en[k] ?? k; return typeof v === "function" ? v(...args) : v; };
+const CIG = 22; // Berkeley Earth: 22 µg/m³ of PM2.5 breathed for 24 h ≈ one cigarette
+const PM25_BP = [[0, 30, 0, 50], [31, 60, 51, 100], [61, 90, 101, 200], [91, 120, 201, 300], [121, 250, 301, 400], [251, 500, 401, 500]];
+function pmAqi(c) { for (const [lo, hi, a, b] of PM25_BP) if (c <= hi) { c = Math.max(c, lo); return Math.round(a + (b - a) * (c - lo) / (hi - lo)); } return 500; }
+function aqiCat(a) { return a <= 50 ? "Good" : a <= 100 ? "Satisfactory" : a <= 200 ? "Moderate" : a <= 300 ? "Poor" : a <= 400 ? "Very Poor" : "Severe"; }
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const catLabel = (c) => (lang === "hi" ? CAT_HI[c] || c : c);
@@ -239,6 +262,13 @@ function renderAir() {
   $("#placeName").querySelector(".i").style.cssText = "width:16px;height:16px;vertical-align:-2px";
   $("#aqiNum").textContent = n.aqi ?? "--";
   $("#aqiCat").textContent = catLabel(n.category);
+  const pms = a.next24.map((h) => h.pm25).filter((v) => v != null);
+  if (pms.length) {
+    const cig = (pms.reduce((x, y) => x + y, 0) / pms.length / CIG).toFixed(1);
+    $("#cig").hidden = false;
+    $("#cig").innerHTML = `${icon("cigarette")}<span>${t("cigDay", cig)}</span>`;
+  }
+  loadSmoke();
   $("#aqiSub").textContent = `${t("pm")} ${Math.round(n.pm25)} µg/m³  ·  ${t("wind")} ${Math.round(n.wind_speed ?? 0)} km/h`;
   const end = a.best_window && new Date(new Date(a.best_window.end).getTime() + 3600e3).toISOString();
   $("#bestWin").textContent = a.best_window ? `${hh(a.best_window.start)} – ${hh(end)}` : "--";
@@ -253,6 +283,25 @@ function renderAir() {
     const l = ((d.avg - lo) / (hi - lo)) * 100, w = Math.max(8, ((d.max - d.avg) / (hi - lo)) * 100);
     return `<div class="row"><span class="d">${name}</span><span class="bar"><i style="left:${l}%;width:${Math.min(w, 100 - l)}%;background:linear-gradient(90deg, ${COLORS[d.category]}88, ${COLORS[d.category]})"></i></span><span class="m">${d.max}</span></div>`;
   }).join("");
+}
+
+/* ---------- Smoke watch ---------- */
+async function loadSmoke() {
+  if (state.lat == null) return;
+  const key = `${state.lat},${state.lon}`;
+  if (!state.smoke || state.smokeKey !== key) {
+    try { state.smoke = await fetch(`/api/smoke?lat=${state.lat}&lon=${state.lon}`).then((r) => (r.ok ? r.json() : null)); state.smokeKey = key; }
+    catch (e) { state.smoke = null; }
+  }
+  const S = state.smoke, el = $("#smoke");
+  if (!S) { el.hidden = true; return; }
+  const w = lang === "hi" ? S.wind.from_name_hi : S.wind.from_name;
+  const line = S.fires_upwind ? t("smokeLine", w, Math.round(S.wind.speed_kmh), S.median_upwind_km, S.eta_hours) : t("smokeCalm");
+  el.hidden = false;
+  el.innerHTML = `<div class="label caps">${icon("satellite")}<span>${t("smokeTitle")}</span><span class="tag risk-${S.risk}" style="margin-left:auto">${t("risk_" + S.risk)}</span></div>
+    <div class="smoke-row"><div class="smoke-num">${S.fires_upwind}</div><div class="smoke-txt">${t("firesUpwind")}</div></div>
+    <p class="summary" style="margin:6px 0 4px">${esc(line)}</p><p class="small" style="margin:0 0 10px">${t("firesNear", S.fires_near, S.radius_km)}</p>
+    <button class="btn" data-goto="map">${icon("map")}<span>${t("seeFires")}</span></button>`;
 }
 
 /* ---------- Scan ---------- */
@@ -362,11 +411,15 @@ function renderResult(scroll) {
   h += card(ph + "</div>");
 
   if (R.indoor) {
-    const I = R.indoor, tot = Math.max(1, I.from_outside + I.from_inside);
+    const I = R.indoor;
+    const chips = (I.contributions || []).map((c) => {
+      const nm = R.sources.find((x) => x.type === c.source);
+      return `<button class="chip wi" data-wi="rm:${c.source}">${t("wiRemove")} ${esc(nm ? (lang === "hi" ? nm.name_hi : nm.name_en).toLowerCase() : c.source)}</button>`;
+    }).join("");
     h += card(`<div class="label caps">${t("roomTitle")} <span class="tag" style="margin-left:auto">${t("estimate")}</span></div>
-      <div class="room-aqi">${I.aqi_low}–${I.aqi_high}</div><div class="room-cat" style="color:${COLORS[I.category]}">AQI · ${esc(catLabel(I.category))}</div>
-      <div class="meter"><div class="out" style="width:${(I.from_outside / tot) * 100}%"></div><div class="in" style="width:${(I.from_inside / tot) * 100}%"></div></div>
-      <div class="meter-legend"><span><i style="background:#8e9ba8"></i>${I.from_outside} µg/m³ ${t("fromOut")}</span><span><i style="background:var(--vpoor)"></i>${I.from_inside} µg/m³ ${t("fromIn")}</span></div>
+      <div id="roomBox"></div>
+      <div class="label caps" style="margin-top:18px">${icon("sliders")}<span>${t("whatIf")}</span></div>
+      <div class="chips">${chips}${R.ventilation !== "open" ? `<button class="chip wi" data-wi="open">${t("wiOpen")}</button>` : ""}${!R.purifier ? `<button class="chip wi" data-wi="filter">${t("wiFilter")}</button>` : ""}</div>
       <p class="small">${t("estNote")}</p>`);
   }
 
@@ -390,6 +443,37 @@ function renderResult(scroll) {
   el.innerHTML = h;
   if (scroll) el.scrollIntoView({ behavior: "smooth" });
   wireResult(R, plan);
+  if (R.indoor) wireWhatIf(R);
+}
+
+function roomCalc(R, off, open, filter) {
+  const pm = (R.air && R.air.now.pm25) || 60;
+  const vent = open ? "open" : R.ventilation;
+  const pur = filter || R.purifier;
+  const f = pur ? 0.35 : ({ open: 0.9, closed: 0.65 }[vent] ?? 0.8);
+  const add = (R.indoor.contributions || []).filter((c) => !off.has(c.source)).reduce((x, c) => x + c.add, 0) * (vent === "closed" ? 1.3 : 1) * (pur ? 0.5 : 1);
+  const out = pm * f, mid = out + add;
+  return { out: Math.round(out), inn: Math.round(add), mid, lo: pmAqi(mid * 0.7), hi: pmAqi(mid * 1.3), aqi: pmAqi(mid) };
+}
+function wireWhatIf(R) {
+  const off = new Set(); let open = false, filter = false;
+  const base = roomCalc(R, off, false, false);
+  const draw = () => {
+    const c = roomCalc(R, off, open, filter), cat = aqiCat(c.aqi), tot = Math.max(1, c.out + c.inn);
+    const changed = off.size || open || filter;
+    $("#roomBox").innerHTML = `<div class="room-aqi" style="color:${changed ? COLORS[cat] : "inherit"}">${c.lo}–${c.hi}</div>
+      <div class="room-cat" style="color:${COLORS[cat]}">AQI · ${esc(catLabel(cat))}${changed ? `<span class="was">${t("wiWas", base.lo, base.hi)}</span>` : ""}</div>
+      <div class="cig-pill">${icon("cigarette")}<span>${t("cigRoom", (c.mid / CIG).toFixed(1))}</span></div>
+      <div class="meter"><div class="out" style="width:${(c.out / tot) * 100}%"></div><div class="in" style="width:${(c.inn / tot) * 100}%"></div></div>
+      <div class="meter-legend"><span><i style="background:#8e9ba8"></i>${c.out} µg/m³ ${t("fromOut")}</span><span><i style="background:var(--vpoor)"></i>${c.inn} µg/m³ ${t("fromIn")}</span></div>`;
+  };
+  document.querySelectorAll("[data-wi]").forEach((b) => (b.onclick = () => {
+    const k = b.dataset.wi;
+    if (k.startsWith("rm:")) { const x = k.slice(3); off.has(x) ? off.delete(x) : off.add(x); }
+    else if (k === "open") open = !open; else if (k === "filter") filter = !filter;
+    b.classList.toggle("on"); draw();
+  }));
+  draw();
 }
 
 function wireResult(R, plan) {
@@ -438,9 +522,10 @@ async function loadMap() {
   }
   $("#legend").innerHTML = `<div class="legend-title">${t("legendSources")}</div>` + ["burning", "dust", "industry", "traffic", "indoor"]
     .map((k) => `<span><i style="background:${SRC_COLORS[k]}"></i>${t(k === "indoor" ? "indoorOnly" : k)}</span>`).join("") +
+    `<div class="legend-title">${t("legendFires")}</div><span><i style="background:#ff2d55"></i>${t("fireUp")}</span><span><i style="background:#ff9f0a"></i>${t("fireOther")}</span><span><i class="sq cone"></i>${t("cone")}</span>` +
     `<div class="legend-title">${t("legendGrid")}</div>` + Object.entries(COLORS).map(([c, v]) => `<span><i class="sq" style="background:${v}"></i>${esc(catLabel(c))}</span>`).join("");
   setTimeout(() => map.invalidateSize(), 60);
-  if (state.lat != null) map.setView([state.lat, state.lon], 10);
+  if (state.lat != null) map.setView([state.lat, state.lon], 7);
   if (!Object.keys(state.sources).length) state.sources = await fetch("/api/sources").then((r) => r.json());
   layer.clearLayers();
 
@@ -461,7 +546,33 @@ async function loadMap() {
     } catch (e) {}
   }
 
-  // 2. Citizen reports: one marker per pollution source found, so every type shows up.
+  // 2. Satellite fires (NASA FIRMS) and the wind cone: where your air is coming from right now.
+  let fireNote = "";
+  if (state.lat != null) {
+    if (!state.smoke || state.smokeKey !== `${state.lat},${state.lon}`) await loadSmoke();
+    const S = state.smoke;
+    if (S) {
+      if (S.wind.speed_kmh >= 2) {
+        const R = 6371, d = S.radius_km / R, la1 = state.lat * Math.PI / 180, lo1 = state.lon * Math.PI / 180;
+        const pts = [[state.lat, state.lon]];
+        for (let b = S.wind.from_deg - S.half_angle; b <= S.wind.from_deg + S.half_angle; b += 3) {
+          const br = b * Math.PI / 180;
+          const la2 = Math.asin(Math.sin(la1) * Math.cos(d) + Math.cos(la1) * Math.sin(d) * Math.cos(br));
+          const lo2 = lo1 + Math.atan2(Math.sin(br) * Math.sin(d) * Math.cos(la1), Math.cos(d) - Math.sin(la1) * Math.sin(la2));
+          pts.push([la2 * 180 / Math.PI, lo2 * 180 / Math.PI]);
+        }
+        L.polygon(pts, { color: "#0a84ff", weight: 1.5, dashArray: "6 6", fillColor: "#0a84ff", fillOpacity: 0.08, interactive: false }).addTo(layer);
+      }
+      const rend = L.canvas({ padding: 0.5 });
+      S.fires.forEach((f) => {
+        L.circleMarker([f.lat, f.lon], { renderer: rend, radius: f.upwind ? 4.5 : 3, stroke: false, fillColor: f.upwind ? "#ff2d55" : "#ff9f0a", fillOpacity: f.upwind ? 0.95 : 0.55 })
+          .bindTooltip(`${f.upwind ? t("fireUp") : t("fireOther")} · ${f.dist_km} km · ${esc(f.time)}`).addTo(layer);
+      });
+      fireNote = `<div class="glass"><b>${S.fires_upwind}</b><span>${t("firesUpCard")}</span></div>`;
+    }
+  }
+
+  // 3. Citizen reports: one marker per pollution source found, so every type shows up.
   const reports = await fetch("/api/reports?days=30").then((r) => r.json());
   const counts = {};
   reports.forEach((r) => {
@@ -475,7 +586,7 @@ async function loadMap() {
         .bindPopup(`<b>${esc(name)}</b><br>${new Date(r.ts * 1000).toLocaleString(locale())}${r.aqi ? `<br>AQI ${r.aqi}` : ""}`).addTo(layer);
     });
   });
-  $("#mapStats").innerHTML = gridNote + `<div class="glass"><b>${reports.length}</b><span>${t("reports")} · ${t("lastDays")}</span></div>` +
+  $("#mapStats").innerHTML = gridNote + fireNote + `<div class="glass"><b>${reports.length}</b><span>${t("reports")} · ${t("lastDays")}</span></div>` +
     ["burning", "dust", "industry", "traffic", "indoor"].filter((g) => counts[g]).map((g) => `<div class="glass"><b>${counts[g]}</b><span>${t(g === "indoor" ? "indoorOnly" : g)}</span></div>`).join("");
 }
 

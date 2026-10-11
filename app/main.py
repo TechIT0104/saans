@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import air as airmod
-from . import llm, store, vision
+from . import fires, llm, store, vision
 from .knowledge import ACTIONS, COMPLAINT_CHANNELS, GENERAL, MEMBER_ADVICE, SOURCES, VIOLATIONS, indoor_estimate
 
 log = logging.getLogger("saans")
@@ -216,8 +216,17 @@ async def api_scan(
     }
 
 
+@app.get("/api/smoke")
+async def api_smoke(lat: float, lon: float):
+    try:
+        return await fires.smoke_watch(lat, lon)
+    except Exception as e:
+        log.exception("smoke")
+        raise HTTPException(502, f"Smoke watch unavailable: {e}")
+
+
 @app.get("/api/aqi-grid")
-async def api_aqi_grid(lat: float, lon: float, n: int = 7, step: float = 0.15):
+async def api_aqi_grid(lat: float, lon: float, n: int = 7, step: float = 0.4):
     """Forecast AQI on an n x n grid around a point, so the map shows how air varies across the region."""
     half = n // 2
     pts = [(round(lat + (r - half) * step, 4), round(lon + (c - half) * step, 4)) for r in range(n) for c in range(n)]

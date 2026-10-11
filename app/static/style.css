@@ -246,3 +246,18 @@ textarea { width: 100%; min-height: 230px; border: 0; border-radius: 14px; paddi
 .legend-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; opacity: .9; margin: 10px 0 6px; }
 .legend i.sq { border-radius: 3px; }
 .aqi-label { font: 700 11px/18px var(--font); color: #1c1c1e; text-align: center; text-shadow: 0 0 3px #fff, 0 0 3px #fff; }
+
+.hero-cig { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; padding: 7px 14px; border-radius: 99px; background: rgba(255,255,255,.2); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); font-size: 14px; font-weight: 500; }
+.hero-cig .i { width: 18px; height: 18px; }
+.smoke-row { display: flex; align-items: baseline; gap: 10px; }
+.smoke-num { font: 300 52px/1 var(--font-display); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.smoke-txt { font: 600 17px var(--font-display); }
+.tag.risk-high { background: rgba(255, 59, 48, .16); color: #d70015; }
+.tag.risk-medium { background: rgba(255, 149, 0, .18); color: #c93400; }
+.tag.risk-low { background: rgba(52, 199, 89, .16); color: #248a3d; }
+.cig-pill { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; padding: 5px 10px; border-radius: 99px; background: var(--hair); font-size: 13px; font-weight: 500; }
+.cig-pill .i { width: 16px; height: 16px; }
+.room-cat .was { margin-left: 10px; font-size: 13px; font-weight: 500; color: var(--ink-3); text-decoration: line-through; }
+.chip.wi.on { background: var(--good); border-color: var(--good); color: #fff; }
+
+.legend i.cone { background: rgba(10, 132, 255, .25); border: 1.5px dashed #0a84ff; }
