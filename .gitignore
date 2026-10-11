@@ -9,3 +9,4 @@ models/*.pt
 deploy/last-deploy.txt
 deploy/.build/
 deploy/.build/
+data/
