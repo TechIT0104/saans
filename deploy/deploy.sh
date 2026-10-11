@@ -103,6 +103,7 @@ Description=Saans
 After=network-online.target
 [Service]
 WorkingDirectory=/opt/saans
+ExecStartPre=/bin/bash -c 'aws s3 cp s3://$BUCKET/saans-app.tgz /opt/saans/saans-app.tgz --region $REGION && tar xzf /opt/saans/saans-app.tgz -C /opt/saans'
 Environment=AWS_REGION=$REGION
 Environment=SAANS_TABLE=$TABLE
 Environment=SAANS_LLM_BACKEND=$BACKEND

@@ -95,6 +95,6 @@ def smoke(img: Image.Image, conf=0.30, iou=0.5):
         x1, y1, x2, y2 = xyxy[i]
         res.append({
             "label": SMOKE_NAMES[int(cls[i])], "confidence": round(float(sc[i]), 2),
-            "box": [max(0.0, (x1 - px) / nw), max(0.0, (y1 - py) / nh), min(1.0, (x2 - px) / nw), min(1.0, (y2 - py) / nh)],
+            "box": [float(max(0.0, (x1 - px) / nw)), float(max(0.0, (y1 - py) / nh)), float(min(1.0, (x2 - px) / nw)), float(min(1.0, (y2 - py) / nh))],
         })
     return res
