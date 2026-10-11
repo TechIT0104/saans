@@ -74,6 +74,21 @@ def _actions(ranked: list, aqi, has_indoor: bool, members: list, purifier: bool)
     return out
 
 
+def _hindi_plan(ranked, air, indoor, actions) -> dict:
+    cat = airmod.CATEGORIES_HI.get(air["now"]["category"], "") if air else ""
+    aqi = air["now"]["aqi"] if air else None
+    head = f"{ranked[0]['name_hi']} आपकी हवा को सबसे ज़्यादा खराब कर रहा है।" if ranked else f"आज आपके इलाके की हवा {cat} है।"
+    parts = [f"बाहर की हवा अभी {cat} है (AQI {aqi})।"] if aqi else []
+    if indoor:
+        parts.append(f"आपके कमरे का अनुमानित AQI {indoor['aqi_low']}–{indoor['aqi_high']} है।")
+    todo = [a for a in actions if a.get("for") not in ("myth",)]
+    if todo:
+        parts.append("सबसे पहले: " + todo[0]["hi"])
+    if len(todo) > 1:
+        parts.append("फिर: " + todo[1]["hi"])
+    return {"headline": head, "summary": " ".join(parts)}
+
+
 @app.post("/api/scan")
 async def api_scan(
     files: List[UploadFile] = File(...),
@@ -151,9 +166,13 @@ async def api_scan(
             "law": [VIOLATIONS[v] for v in violations],
         }
         try:
-            plan = await asyncio.to_thread(llm.write_plan, ctx, lang)
+            # The complaint is always written in formal English; Hindi headline/summary come from templates
+            # because the 7B model's Hindi is not reliable enough.
+            plan = await asyncio.to_thread(llm.write_plan, ctx, "en" if lang == "hi" else lang)
         except Exception:
             log.exception("plan llm")
+    if lang == "hi":
+        plan = {**(plan or {"complaint_subject": "", "complaint_body": ""}), **_hindi_plan(ranked, air, indoor, actions)}
 
     report = None
     if ranked:

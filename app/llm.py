@@ -72,6 +72,8 @@ SCAN_TOOL = {
 
 SCAN_PROMPT = """You are an air-pollution field inspector in India. The user took {n} photos turning around where they live (outdoors and/or inside their home).
 Find every visible source of air pollution, or clear evidence of one. Only report what you can actually see: no guessing from the type of place.
+A source counts even when no smoke is visible: a building under construction, scaffolding, or open sand/debris piles = construction_dust; dense or jammed traffic = traffic_congestion; a garbage heap = landfill_dump; a wood or dung fire in a mud stove = biomass_chulha; a coil or agarbatti = mosquito_coil / incense_dhoop.
+Check every photo separately and list every source you find, one entry per photo it appears in.
 Indian context: kachra being burnt in a lane or plot, uncovered sand/debris at construction sites, broken or kachcha roads, idling autos/buses, DG sets, chimneys, brick kilns, garbage heaps; indoors: mosquito coils, agarbatti/dhoop, wood/dung chulhas, gas stoves with no exhaust, cigarettes/bidis, kerosene lamps, damp walls with mould.
 Our smoke detector model already found these boxes (photo index -> label, confidence): {hints}. Use them as hints, but confirm them visually.
 Also judge whether windows/doors look open or closed, and whether an air purifier is visible.
@@ -108,6 +110,46 @@ def _schema_text(tool):
     return json.dumps(tool["toolSpec"]["inputSchema"]["json"], ensure_ascii=False)
 
 
+PHOTO_PROMPT = """You are an air-pollution field inspector in India. This photo was taken {where} the user's home.
+List every source of air pollution visible in it. A source counts even when no smoke is visible:
+- garbage being burnt = garbage_burning; other smoke or open fire = open_fire_smoke; garbage heap = landfill_dump
+- building under construction, scaffolding, sand or debris piles = construction_dust; broken or kachcha road = unpaved_road_dust
+- dense or jammed traffic, many idling vehicles = traffic_congestion; generator = diesel_generator; chimney/stack = industrial_chimney; brick kiln = brick_kiln
+- mosquito coil = mosquito_coil; agarbatti/dhoop/incense = incense_dhoop; wood or dung fire in a mud stove = biomass_chulha
+- gas stove with no chimney or exhaust = lpg_stove_no_exhaust; cigarette/bidi = smoking; kerosene lamp = kerosene_lamp; damp or mouldy walls = dampness_mold
+Allowed types: {types}.
+Our smoke detector found: {hints}.
+Reply with ONLY this JSON (no other text):
+{{"scene": "<one short sentence>", "visible_haze": "none|light|heavy", "windows": "open|closed|unknown", "air_purifier": false,
+  "sources": [{{"type": "<allowed type>", "evidence": "<what exactly in the photo shows it>", "distance": "inside|near|street|far", "active": true, "confidence": 0.0}}]}}"""
+
+
+def _analyse_each(jpegs, smoke_hints, settings):
+    """Qwen2.5-VL 7B misses sources when shown many photos at once, so look at one photo at a time."""
+    photos, sources, windows, purifier = [], [], [], False
+    for i, j in enumerate(jpegs):
+        where = "inside" if settings and i < len(settings) and settings[i] == "indoor" else "outside, around"
+        boxes = smoke_hints.get(i) or []
+        hints = ", ".join("%s %.2f" % (b["label"], b["confidence"]) for b in boxes) or "nothing"
+        try:
+            r = _gpu(PHOTO_PROMPT.format(where=where, types=", ".join(SOURCES), hints=hints), [j], max_new_tokens=400)
+        except Exception:
+            r = {}
+        setting = "indoor" if where == "inside" else "outdoor"
+        photos.append({"index": i, "setting": setting, "scene": r.get("scene", ""), "visible_haze": r.get("visible_haze", "none")})
+        for s in r.get("sources", []) or []:
+            ev = str(s.get("evidence", "")).lower()
+            hedged = ev.startswith("no ") or "suggest" in ev or "possible" in ev or "may be" in ev
+            if s.get("type") in SOURCES and float(s.get("confidence", 0.6) or 0.6) >= 0.5 and not hedged:
+                sources.append({**s, "photo_index": i, "confidence": float(s.get("confidence", 0.6) or 0.6)})
+        if setting == "indoor":
+            windows.append(r.get("windows", "unknown"))
+            purifier = purifier or bool(r.get("air_purifier"))
+    vent = "closed" if "closed" in windows else ("open" if "open" in windows else "unknown")
+    return {"photos": photos, "sources": sources, "ventilation": vent, "air_purifier_visible": purifier,
+            "notes": f"Scene analysis: Qwen2.5-VL-7B on our GPU, {len(jpegs)} photos analysed one by one."}
+
+
 def analyse_photos(jpegs: list[bytes], smoke_hints: dict, settings=None) -> dict:
     parts = []
     for i, boxes in smoke_hints.items():
@@ -118,9 +160,7 @@ def analyse_photos(jpegs: list[bytes], smoke_hints: dict, settings=None) -> dict
     if settings:
         prompt += "\nThe user labelled the photos: " + ", ".join(f"photo {i} = {v}" for i, v in enumerate(settings)) + "."
     if BACKEND == "gpu":
-        out = _gpu(prompt.replace("Call report_scan with your findings.", "Reply with ONLY a JSON object matching this JSON schema:\n" + _schema_text(SCAN_TOOL)), jpegs)
-        out["sources"] = [s for s in out.get("sources", []) if s.get("type") in SOURCES and float(s.get("confidence", 0)) >= 0.4]
-        return out
+        return _analyse_each(jpegs, smoke_hints, settings)
     content = []
     for i, j in enumerate(jpegs):
         content += [{"text": f"Photo {i}:"}, _image_block(j)]
@@ -157,7 +197,7 @@ PLAN_TOOL = {
 def write_plan(context: dict, lang: str) -> dict:
     language = "Hindi (Devanagari script, simple everyday words)" if lang == "hi" else "simple English"
     prompt = f"""You help an Indian family understand why the air around them is bad and what to do.
-Write in {language}. Be specific to what was found; never invent sources that are not in the data.
+Write in {language}. Be specific to what was found; never invent sources that are not in the data. "family" lists separate household members (e.g. a child and a different person with asthma).
 Data (JSON): {json.dumps(context, ensure_ascii=False)}
 - headline: the single biggest cause of bad air for this family right now (indoor sources often matter more than outdoor ones).
 - summary: what is happening and the 2 most important things to do today.
