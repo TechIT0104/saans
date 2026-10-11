@@ -1,0 +1,8 @@
+fastapi==0.139.2
+uvicorn[standard]
+python-multipart
+httpx
+boto3
+onnxruntime
+pillow
+numpy

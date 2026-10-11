@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Saans</title>
+<meta name="description" content="Know why your air is bad and what to do about it.">
+<meta name="theme-color" content="#0f766e">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%230f766e'/><path d='M22 42h40a10 10 0 1 0-10-10M22 58h52a10 10 0 1 1-10 10' stroke='white' stroke-width='7' fill='none' stroke-linecap='round'/></svg>">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo" aria-hidden="true"></span><div><b>Saans</b><small data-i18n="tagline">Know why your air is bad. Fix it.</small></div></div>
+  <button id="langBtn" class="pill" aria-label="Switch language">हिंदी</button>
+</header>
+
+<main>
+  <!-- AIR -->
+  <section id="tab-air" class="tab active">
+    <div class="locbar">
+      <button id="locBtn" class="btn primary" data-i18n="useLocation">📍 Use my location</button>
+      <form id="searchForm" class="search"><input id="searchIn" placeholder="Search town or city" data-i18n-ph="searchPh" autocomplete="off"><button class="btn" aria-label="Search">🔎</button></form>
+      <div id="searchResults" class="results-list"></div>
+    </div>
+    <div id="airEmpty" class="empty" data-i18n="airEmpty">Share your location to see the air where you are, hour by hour.</div>
+    <div id="airView" hidden>
+      <div id="aqiCard" class="aqi-card">
+        <div class="aqi-place" id="placeName"></div>
+        <div class="aqi-row"><div class="aqi-num" id="aqiNum">–</div><div><div class="aqi-cat" id="aqiCat"></div><div class="aqi-sub" id="aqiSub"></div></div></div>
+        <div class="aqi-src" data-i18n="aqiSource">India AQI from the CAMS satellite-model forecast for your area. A nearby monitor may differ.</div>
+      </div>
+      <div class="cards2">
+        <div class="mini good"><span data-i18n="bestTime">Cleanest hours</span><b id="bestWin">–</b></div>
+        <div class="mini bad"><span data-i18n="worstTime">Worst hour</span><b id="worstHr">–</b></div>
+      </div>
+      <h3 data-i18n="next24">Next 24 hours</h3>
+      <div id="hourBars" class="bars" role="img" aria-label="Hourly AQI"></div>
+      <div class="bar-axis"><span id="axStart"></span><span id="axEnd"></span></div>
+      <h3 data-i18n="next5">Next 5 days</h3>
+      <div id="days" class="days"></div>
+      <button class="btn primary big" data-goto="scan" data-i18n="whyCta">Why is my air bad? Scan around you →</button>
+    </div>
+  </section>
+
+  <!-- SCAN -->
+  <section id="tab-scan" class="tab">
+    <h2 data-i18n="scanTitle">360° air scan</h2>
+    <p class="muted" data-i18n="scanHelp">Stand where you live. Take a photo in each direction, then one inside your room. Saans finds what is polluting your air.</p>
+    <h3 data-i18n="whoLives">Who lives with you?</h3>
+    <div id="members" class="chips">
+      <button class="chip" data-m="child" data-i18n="m_child">👧 Child</button>
+      <button class="chip" data-m="elderly" data-i18n="m_elderly">👴 Elderly</button>
+      <button class="chip" data-m="asthma" data-i18n="m_asthma">🫁 Asthma / heart</button>
+      <button class="chip" data-m="pregnant" data-i18n="m_pregnant">🤰 Pregnant</button>
+      <button class="chip" data-m="outdoor_worker" data-i18n="m_worker">👷 Works outdoors</button>
+    </div>
+    <div id="slots" class="slots"></div>
+    <button id="scanBtn" class="btn primary big" disabled data-i18n="analyse">Find the sources</button>
+    <div id="scanProgress" class="progress" hidden>
+      <div class="spinner"></div>
+      <ol id="steps">
+        <li data-i18n="st1">Checking the air forecast for your spot</li>
+        <li data-i18n="st2">Looking for smoke with our trained detector</li>
+        <li data-i18n="st3">Reading haze in the sky</li>
+        <li data-i18n="st4">Naming every pollution source (Amazon Bedrock)</li>
+        <li data-i18n="st5">Building your family's action plan</li>
+      </ol>
+    </div>
+    <div id="scanResult" hidden></div>
+  </section>
+
+  <!-- MAP -->
+  <section id="tab-map" class="tab">
+    <h2 data-i18n="mapTitle">Pollution reports near you</h2>
+    <p class="muted" data-i18n="mapHelp">Every scan adds an anonymous dot (rounded to about 100 m, no photos). Together they show the burning and dust hotspots that air monitors miss.</p>
+    <div id="mapStats" class="map-stats"></div>
+    <div id="map"></div>
+    <div id="legend" class="legend"></div>
+  </section>
+</main>
+
+<nav class="bottom">
+  <button data-tab="air" class="active"><span>🌫️</span><b data-i18n="tabAir">Air</b></button>
+  <button data-tab="scan"><span>📷</span><b data-i18n="tabScan">Scan</b></button>
+  <button data-tab="map"><span>🗺️</span><b data-i18n="tabMap">Map</b></button>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
