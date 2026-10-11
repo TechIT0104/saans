@@ -13,18 +13,20 @@ Every AQI app gives you a number. None of them tells you *why* the air in your l
 
 ## What Saans does
 
-1. **Air where you are, hour by hour.** India AQI (CPCB NAQI scale) for your exact location from the CAMS satellite-model forecast, including places with no monitor. Shows the cleanest hours today, the worst hour and a 5-day outlook.
-2. **360° scan.** Take 4–6 photos: four directions outside and one or two inside your home. Saans:
+1. **Air where you are, hour by hour.** India AQI (CPCB NAQI scale) for your exact location from the CAMS satellite-model forecast, including places with no monitor. Shows the cleanest hours today, the worst hour, a 5-day outlook, and what a day of this air equals in **cigarettes** (Berkeley Earth: 22 µg/m³ of PM2.5 for 24 h ≈ 1 cigarette).
+2. **Smoke Watch.** Live NASA FIRMS satellite fire detections (VIIRS, last 24 h) combined with the 850 hPa wind forecast: how many fires are **upwind of you**, which direction the smoke is coming from, and roughly when it can arrive. The map draws the wind cone and lights up the fires inside it.
+3. **360° scan.** Take 4–6 photos: four directions outside and one or two inside your home. Saans:
    - draws boxes around **smoke and fire** with our YOLO11 detector, fine-tuned on 21,527 D-Fire images on our GPUs;
    - reads **visible haze** with our ConvNeXt model, fine-tuned on 12,240 India/Nepal photos tagged with station AQI;
-   - **names every pollution source** with an open vision-language model (Qwen2.5-VL-7B) running on our own GPU, looking at one photo at a time: garbage burning, construction dust, broken roads, traffic, DG sets, chimneys, kilns, mosquito coils, agarbatti, chulhas, closed windows, damp walls and more;
+   - **names and boxes every pollution source** with an open vision-language model (Qwen2.5-VL-7B, visual grounding) running on our own GPU, one photo at a time: garbage burning, construction dust, broken roads, traffic, DG sets, chimneys, kilns, mosquito coils, agarbatti, chulhas, closed windows, damp walls and more;
    - **ranks the sources** by how much each one is likely hurting *this* household.
-3. **Your room's air (estimate).** Outdoor PM2.5 × ventilation, plus the indoor sources it saw. Shown as a range with a split: "from outside air" vs "from sources inside". Labelled as an estimate, not a measurement.
-4. **An action plan for your family,** with free actions first. It's tailored to who lives with you (child, elderly, asthma, pregnant, outdoor worker) and includes myth-busting ("plants don't clean air").
-5. **A complaint with evidence.** For outdoor violations, Saans drafts a complaint in English or Hindi with the time, location, what was seen and the rule it breaks. It can be shared with the photo via WhatsApp, email or the share sheet.
-6. **Community map.** Each scan adds an anonymous report (location rounded to ~100 m, no photos), so burning and dust hotspots appear where no monitor exists.
-7. **Hindi everywhere,** plus a spoken summary through Amazon Polly.
-8. **A living interface.** The sky colour follows the live AQI, and the particles on screen get denser with PM2.5 and drift in the real wind direction.
+4. **Your room's air (estimate) and a what-if simulator.** Outdoor PM2.5 × ventilation, plus the indoor sources it saw, shown as a range with a "from outside" vs "from inside" split and a cigarette equivalent. Tap "remove the coil", "open the windows" or "run a DIY filter" and watch the room's AQI fall live.
+5. **An action plan for your family,** with free actions first. It's tailored to who lives with you (child, elderly, asthma, pregnant, outdoor worker) and includes myth-busting ("plants don't clean air").
+6. **A complaint with evidence.** For outdoor violations, Saans drafts a complaint in English or Hindi with the time, location, what was seen and the rule it breaks. It can be shared with the photo via WhatsApp, email or the share sheet.
+7. **A shareable family air report.** One tap turns the scan into an image card for a family or RWA WhatsApp group.
+8. **Community map and ward-officer view.** Each scan adds an anonymous report (location rounded to ~100 m, no photos), drawn over a live AQI grid (one square per 40 km model cell). Reports within ~500 m are grouped into hotspots, violations are flagged, and officers can download a CSV inspection list.
+9. **Hindi everywhere,** plus a spoken summary through Amazon Polly.
+10. **A living interface.** The sky colour follows the live AQI, and the particles on screen get denser with PM2.5 and drift in the real wind direction.
 
 ## Architecture
 
@@ -35,6 +37,7 @@ Phone browser ──HTTPS (Caddy + Let's Encrypt)──> Amazon EC2 (FastAPI, m7
                     ├─ Amazon DynamoDB: anonymous community reports
                     ├─ Scene analysis: Qwen2.5-VL-7B on our GPU (gpu_service/vl_server.py)
                     │    or Amazon Bedrock (Nova) with SAANS_LLM_BACKEND=bedrock
+                    ├─ NASA FIRMS VIIRS active fires (24 h) + Open-Meteo 850 hPa wind: Smoke Watch
                     └─ Open-Meteo (CAMS) air-quality + weather forecast
 Amazon S3: model artifacts + app bundle, pulled by the EC2 instance role (least-privilege IAM) at every start
 ```
@@ -86,3 +89,5 @@ Live: https://13-207-153-59.sslip.io
   - "Burning mosquito coil", Ant1234567, CC BY-SA 4.0
   - "Grandmother preparing food inside traditional kitchen (edited)", Mithun Kunwar / Radomianin, CC BY-SA 4.0
 - Air-quality forecasts: Copernicus Atmosphere Monitoring Service (CAMS), via Open-Meteo. Maps: © OpenStreetMap contributors.
+- Fire data: we acknowledge the use of data from NASA's Fire Information for Resource Management System (FIRMS), part of NASA's Earth Science Data and Information System (ESDIS).
+- Cigarette equivalence: Berkeley Earth (Muller & Muller, 2015).
