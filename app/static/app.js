@@ -428,7 +428,7 @@ let map, layer;
 async function loadMap() {
   if (!map) {
     map = L.map("map", { zoomControl: false }).setView([state.lat ?? 22.6, state.lon ?? 79.0], state.lat ? 13 : 5);
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", { maxZoom: 19, attribution: "© OpenStreetMap © CARTO" }).addTo(map);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap contributors" }).addTo(map);
     L.control.zoom({ position: "bottomright" }).addTo(map);
     layer = L.layerGroup().addTo(map);
   }
