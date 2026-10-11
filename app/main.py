@@ -150,7 +150,9 @@ async def api_scan(
     for p in scene["photos"]:
         i = p["index"]
         if 0 <= i < len(imgs):
-            photos.append({**p, "smoke_boxes": smoke.get(i, []), "haze_model": haze.get(i) if p["setting"] == "outdoor" else None})
+            sboxes = [{"type": x["type"], "name_en": SOURCES[x["type"]]["en"], "name_hi": SOURCES[x["type"]]["hi"], "box": x["box"]}
+                      for x in scene["sources"] if x.get("photo_index") == i and x.get("box")]
+            photos.append({**p, "smoke_boxes": smoke.get(i, []), "source_boxes": sboxes, "haze_model": haze.get(i) if p["setting"] == "outdoor" else None})
     outdoor_haze = [h["haze_model"]["level"] for h in photos if h.get("haze_model")]
     haze_flag = None
     if outdoor_haze and "heavy" in outdoor_haze and aqi is not None and aqi <= 200:

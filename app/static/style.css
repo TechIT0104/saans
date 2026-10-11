@@ -261,3 +261,8 @@ textarea { width: 100%; min-height: 230px; border: 0; border-radius: 14px; paddi
 .chip.wi.on { background: var(--good); border-color: var(--good); color: #fff; }
 
 .legend i.cone { background: rgba(10, 132, 255, .25); border: 1.5px dashed #0a84ff; }
+
+.ph .src-bx { border-color: #ffd60a; }
+.ph .src-bx span { background: #ffd60a; color: #1c1c1e; }
+
+.photos { align-items: start; }

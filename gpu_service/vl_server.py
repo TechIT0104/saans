@@ -58,7 +58,9 @@ def generate(req: Req):
         data = _json(raw)
     except Exception as e:
         raise HTTPException(502, f"{e}")
-    return {"result": data, "seconds": round(time.time() - t0, 1), "model": MODEL}
+    grid = inputs.get("image_grid_thw")
+    sizes = [[int(g[2]) * 14, int(g[1]) * 14] for g in grid.tolist()] if grid is not None else []
+    return {"result": data, "seconds": round(time.time() - t0, 1), "model": MODEL, "image_sizes": sizes}
 
 
 @app.get("/health")

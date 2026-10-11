@@ -404,7 +404,8 @@ function renderResult(scroll) {
   let ph = `<div class="label caps">${t("photosTitle")}</div><div class="photos">`;
   R.photos.forEach((p) => {
     const src = state.sent && state.sent[p.index] ? state.sent[p.index].url : "";
-    const boxes = (p.smoke_boxes || []).map((b) => `<div class="bx" style="left:${b.box[0] * 100}%;top:${b.box[1] * 100}%;width:${(b.box[2] - b.box[0]) * 100}%;height:${(b.box[3] - b.box[1]) * 100}%"><span>${b.label} ${Math.round(b.confidence * 100)}%</span></div>`).join("");
+    const boxes = (p.source_boxes || []).map((b) => `<div class="bx src-bx" style="left:${b.box[0] * 100}%;top:${b.box[1] * 100}%;width:${(b.box[2] - b.box[0]) * 100}%;height:${(b.box[3] - b.box[1]) * 100}%"><span>${esc(lang === "hi" ? b.name_hi : b.name_en)}</span></div>`).join("") +
+      (p.smoke_boxes || []).map((b) => `<div class="bx" style="left:${b.box[0] * 100}%;top:${b.box[1] * 100}%;width:${(b.box[2] - b.box[0]) * 100}%;height:${(b.box[3] - b.box[1]) * 100}%"><span>${b.label} ${Math.round(b.confidence * 100)}%</span></div>`).join("");
     const hz = p.haze_model ? `${p.scene ? " · " : ""}${t("haze")}: ${t(p.haze_model.level)}` : "";
     ph += `<div class="ph"><img src="${src}" alt="">${boxes}<div class="cap">${esc(p.scene)}${hz}</div></div>`;
   });

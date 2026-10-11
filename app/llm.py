@@ -98,12 +98,26 @@ def _tool_input(resp, name):
     raise ValueError("model returned no structured result")
 
 
-def _gpu(prompt: str, jpegs=(), max_new_tokens=900) -> dict:
+def _gpu_full(prompt: str, jpegs=(), max_new_tokens=900) -> dict:
     r = httpx.post(GPU_URL + "/generate", timeout=180, json={
         "prompt": prompt, "max_new_tokens": max_new_tokens,
         "images": [base64.b64encode(j).decode() for j in jpegs]})
     r.raise_for_status()
-    return r.json()["result"]
+    return r.json()
+
+
+def _gpu(prompt: str, jpegs=(), max_new_tokens=900) -> dict:
+    return _gpu_full(prompt, jpegs, max_new_tokens)["result"]
+
+
+def _norm_box(b, size):
+    try:
+        w, h = size
+        x1, y1, x2, y2 = [float(v) for v in b]
+        box = [max(0.0, min(1.0, x1 / w)), max(0.0, min(1.0, y1 / h)), max(0.0, min(1.0, x2 / w)), max(0.0, min(1.0, y2 / h))]
+        return box if box[2] - box[0] > 0.01 and box[3] - box[1] > 0.01 else None
+    except Exception:
+        return None
 
 
 def _schema_text(tool):
@@ -121,7 +135,8 @@ Allowed types: {types}.
 Our smoke detector found: {hints}.
 Reply with ONLY this JSON (no other text):
 {{"scene": "<one short sentence>", "visible_haze": "none|light|heavy", "windows": "open|closed|unknown", "air_purifier": false,
-  "sources": [{{"type": "<allowed type>", "evidence": "<what exactly in the photo shows it>", "distance": "inside|near|street|far", "active": true, "confidence": 0.0}}]}}"""
+  "sources": [{{"type": "<allowed type>", "evidence": "<what exactly in the photo shows it>", "distance": "inside|near|street|far", "active": true, "confidence": 0.0, "bbox_2d": [x1, y1, x2, y2]}}]}}
+bbox_2d is the pixel box around that source in this photo."""
 
 
 def _analyse_each(jpegs, smoke_hints, settings):
@@ -132,16 +147,19 @@ def _analyse_each(jpegs, smoke_hints, settings):
         boxes = smoke_hints.get(i) or []
         hints = ", ".join("%s %.2f" % (b["label"], b["confidence"]) for b in boxes) or "nothing"
         try:
-            r = _gpu(PHOTO_PROMPT.format(where=where, types=", ".join(SOURCES), hints=hints), [j], max_new_tokens=400)
+            full = _gpu_full(PHOTO_PROMPT.format(where=where, types=", ".join(SOURCES), hints=hints), [j], max_new_tokens=500)
+            r, size = full["result"], (full.get("image_sizes") or [None])[0]
         except Exception:
-            r = {}
+            r, size = {}, None
         setting = "indoor" if where == "inside" else "outdoor"
         photos.append({"index": i, "setting": setting, "scene": r.get("scene", ""), "visible_haze": r.get("visible_haze", "none")})
         for s in r.get("sources", []) or []:
             ev = str(s.get("evidence", "")).lower()
             hedged = ev.startswith("no ") or "suggest" in ev or "possible" in ev or "may be" in ev
             if s.get("type") in SOURCES and float(s.get("confidence", 0.6) or 0.6) >= 0.5 and not hedged:
-                sources.append({**s, "photo_index": i, "confidence": float(s.get("confidence", 0.6) or 0.6)})
+                box = _norm_box(s.get("bbox_2d"), size) if size and s.get("bbox_2d") else None
+                sources.append({**{k: v for k, v in s.items() if k != "bbox_2d"}, "photo_index": i, "box": box,
+                                "confidence": float(s.get("confidence", 0.6) or 0.6)})
         if setting == "indoor":
             windows.append(r.get("windows", "unknown"))
             purifier = purifier or bool(r.get("air_purifier"))
