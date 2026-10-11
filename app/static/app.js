@@ -74,6 +74,12 @@ const T = {
     legendFires: "Satellite fires (last 24 h)", fireUp: "Upwind of you", fireOther: "Other fires", cone: "Where your air is coming from",
     whatIf: "What if you…", wiRemove: "Remove", wiOpen: "Open the windows", wiFilter: "Run a DIY air filter",
     wiWas: (a, b) => `was ${a}–${b}`, firesUpCard: "Fires upwind",
+    shareTitle: "Share this report", shareHelp: "Send your family or RWA group a one-page air report for this home.",
+    shareCard: "Create report card", download: "Download", cardOutside: "outside", cardRoom: "Your room",
+    cardSources: "What is polluting this home", cardDo: "Do this today", cardCig: (c) => `≈ ${c} cigarettes a day`,
+    hotTitle: "For ward officers: hotspots to inspect", hotHelp: "Reports within about 500 m are grouped. Violations are flagged.",
+    hotEmpty: "No reports yet in the last 30 days.", hotCsv: "Download inspection list (CSV)", hotReports: (n) => `${n} report${n === 1 ? "" : "s"}`,
+    hotLast: "Last reported", openMaps: "Open in Maps",
   },
   hi: {
     welcomePlace: "आपकी हवा, आसान भाषा में", welcomeCat: "शुरू करने के लिए लोकेशन दें",
@@ -113,6 +119,12 @@ const T = {
     legendFires: "सैटेलाइट से दिखी आग (24 घंटे)", fireUp: "आपकी हवा की दिशा में", fireOther: "बाकी आग", cone: "आपकी हवा कहाँ से आ रही है",
     whatIf: "अगर आप…", wiRemove: "हटाएँ", wiOpen: "खिड़कियाँ खोलें", wiFilter: "DIY एयर फ़िल्टर चलाएँ",
     wiWas: (a, b) => `पहले ${a}–${b}`, firesUpCard: "हवा की दिशा में आग",
+    shareTitle: "यह रिपोर्ट भेजें", shareHelp: "अपने परिवार या RWA ग्रुप को इस घर की एक पन्ने की हवा रिपोर्ट भेजें।",
+    shareCard: "रिपोर्ट कार्ड बनाएँ", download: "डाउनलोड", cardOutside: "बाहर", cardRoom: "आपका कमरा",
+    cardSources: "इस घर की हवा को क्या गंदा कर रहा है", cardDo: "आज यह करें", cardCig: (c) => `≈ ${c} सिगरेट रोज़`,
+    hotTitle: "वार्ड अधिकारियों के लिए: जाँच की जगहें", hotHelp: "लगभग 500 मीटर के अंदर की रिपोर्ट एक साथ गिनी गई हैं। उल्लंघन चिह्नित हैं।",
+    hotEmpty: "पिछले 30 दिनों में अभी कोई रिपोर्ट नहीं।", hotCsv: "जाँच सूची डाउनलोड करें (CSV)", hotReports: (n) => `${n} रिपोर्ट`,
+    hotLast: "आख़िरी रिपोर्ट", openMaps: "मैप में खोलें",
   },
 };
 
@@ -440,6 +452,8 @@ function renderResult(scroll) {
       <button class="btn" id="copyBtn">${icon("copy")}<span>${t("copy")}</span></button></div>
       <p class="small">${t("sendTo")}: ${R.channels.map((c) => esc(c.name)).join(" · ")}</p>`);
   }
+  h += card(`<div class="label caps">${icon("share")}<span>${t("shareTitle")}</span></div><p class="summary" style="margin:0 0 12px">${t("shareHelp")}</p>
+    <button class="btn filled" id="cardBtn">${icon("share")}<span>${t("shareCard")}</span></button><div id="cardOut"></div>`);
   h += `<button class="btn filled big" data-goto="map"><span>${t("seeMap")}</span>${icon("chevron")}</button>`;
   el.innerHTML = h;
   if (scroll) el.scrollIntoView({ behavior: "smooth" });
@@ -477,7 +491,76 @@ function wireWhatIf(R) {
   draw();
 }
 
+/* ---------- Shareable report card ---------- */
+function wrapText(g, text, x, y, maxW, lh, maxLines = 3) {
+  const words = String(text).split(" "); let line = "", n = 0;
+  for (const w of words) {
+    const test = line ? line + " " + w : w;
+    if (g.measureText(test).width > maxW && line) {
+      if (++n >= maxLines) { g.fillText(line + "…", x, y); return y + lh; }
+      g.fillText(line, x, y); y += lh; line = w;
+    } else line = test;
+  }
+  if (line) { g.fillText(line, x, y); y += lh; }
+  return y;
+}
+async function makeCard(R) {
+  const F = "Inter, 'Noto Sans Devanagari', sans-serif";
+  try { await Promise.all(["200 100px Inter", "600 40px Inter", "400 30px 'Noto Sans Devanagari'"].map((f) => document.fonts.load(f))); } catch (e) {}
+  const W = 1080, H = 1350, c = document.createElement("canvas"); c.width = W; c.height = H;
+  const g = c.getContext("2d");
+  const SK = { Good: ["#1f7ae0", "#cfe6fb"], Satisfactory: ["#3f86bf", "#dbe9ee"], Moderate: ["#7894a6", "#ece4cc"], Poor: ["#8a7d70", "#efd6b4"], "Very Poor": ["#5f514b", "#d1ab88"], Severe: ["#2d2725", "#9a7559"] };
+  const cat = R.air ? R.air.now.category : "Moderate";
+  const [c1, c2] = SK[cat] || SK.Moderate;
+  const grd = g.createLinearGradient(0, 0, 0, H); grd.addColorStop(0, c1); grd.addColorStop(1, c2);
+  g.fillStyle = grd; g.fillRect(0, 0, W, H);
+  g.fillStyle = "rgba(255,255,255,.25)";
+  for (let i = 0; i < 140; i++) { g.beginPath(); g.arc(Math.random() * W, Math.random() * 560, Math.random() * 3 + 1, 0, 7); g.fill(); }
+  g.fillStyle = "#fff";
+  g.font = `600 44px ${F}`; g.fillText("Saans", 72, 104);
+  g.font = `400 30px ${F}`; g.fillText(`${state.place || ""}  ·  ${R.time}`, 72, 152);
+  g.font = `200 230px ${F}`; g.fillText(String(R.air ? R.air.now.aqi : "--"), 60, 380);
+  g.font = `600 48px ${F}`; g.fillText(`AQI · ${catLabel(cat)} ${t("cardOutside")}`, 72, 452);
+  if (R.indoor) {
+    const ic = roomCalc(R, new Set(), false, false);
+    g.font = `500 34px ${F}`;
+    g.fillText(`${t("cardRoom")}: AQI ${ic.lo}–${ic.hi} · ${t("cardCig", (ic.mid / CIG).toFixed(1))}`, 72, 512);
+  }
+  // panel
+  const px = 48, py = 560, pw = W - 96, ph = H - py - 110;
+  g.fillStyle = "rgba(255,255,255,.9)"; g.beginPath(); g.roundRect(px, py, pw, ph, 36); g.fill();
+  let y = py + 72; g.fillStyle = "#0d1b2a";
+  g.font = `700 30px ${F}`; g.fillText(t("cardSources").toUpperCase(), px + 44, y); y += 56;
+  R.sources.slice(0, 3).forEach((x, i) => {
+    g.fillStyle = "#0d1b2a"; g.beginPath(); g.arc(px + 66, y - 12, 22, 0, 7); g.fill();
+    g.fillStyle = "#fff"; g.font = `700 26px ${F}`; g.fillText(String(i + 1), px + 58, y - 3);
+    g.fillStyle = "#0d1b2a"; g.font = `600 36px ${F}`; g.fillText(lang === "hi" ? x.name_hi : x.name_en, px + 104, y);
+    y += 58;
+  });
+  if (!R.sources.length) { g.font = `400 32px ${F}`; y = wrapText(g, t("none"), px + 44, y, pw - 88, 44); }
+  y += 20; g.font = `700 30px ${F}`; g.fillText(t("cardDo").toUpperCase(), px + 44, y); y += 52;
+  g.font = `400 31px ${F}`;
+  R.actions.filter((a) => a.for !== "myth").slice(0, 3).forEach((a) => {
+    g.fillStyle = "#34c759"; g.beginPath(); g.arc(px + 58, y - 10, 8, 0, 7); g.fill();
+    g.fillStyle = "#0d1b2a"; y = wrapText(g, lang === "hi" ? a.hi : a.en, px + 84, y, pw - 130, 42, 2) + 14;
+  });
+  g.fillStyle = "#fff"; g.font = `500 28px ${F}`;
+  g.fillText("Saans · github.com/TechIT0104/saans", 72, H - 46);
+  return new Promise((res) => c.toBlob(res, "image/png"));
+}
+
 function wireResult(R, plan) {
+  const cb = $("#cardBtn");
+  if (cb) cb.onclick = async () => {
+    cb.disabled = true;
+    const blob = await makeCard(R);
+    cb.disabled = false;
+    const url = URL.createObjectURL(blob), file = new File([blob], "saans-air-report.png", { type: "image/png" });
+    $("#cardOut").innerHTML = `<img class="report-card" src="${url}" alt="Air report card"><div class="row"><button class="btn filled" id="cardShare">${icon("share")}<span>${t("share")}</span></button><a class="btn" href="${url}" download="saans-air-report.png">${t("download")}</a></div>`;
+    const sh = $("#cardShare");
+    if (navigator.canShare && navigator.canShare({ files: [file] })) sh.onclick = () => navigator.share({ files: [file], title: "Saans air report" }).catch(() => {});
+    else sh.hidden = true;
+  };
   const listen = $("#listenBtn");
   if (listen) listen.onclick = async () => {
     listen.disabled = true;
@@ -509,6 +592,35 @@ function wireResult(R, plan) {
   $("#copyBtn").onclick = async () => {
     await navigator.clipboard.writeText(text());
     $("#copyBtn").innerHTML = `${icon("check")}<span>${t("copied")}</span>`;
+  };
+}
+
+/* ---------- Hotspots for ward officers ---------- */
+function renderHotspots(reports) {
+  const el = $("#hotspots");
+  const cl = {};
+  reports.forEach((r) => {
+    const k = `${(Math.round(r.lat / 0.005) * 0.005).toFixed(3)},${(Math.round(r.lon / 0.005) * 0.005).toFixed(3)}`;
+    const c = cl[k] || (cl[k] = { lat: r.lat, lon: r.lon, n: 0, types: {}, last: 0 });
+    c.n++; c.last = Math.max(c.last, r.ts); r.sources.forEach((s) => (c.types[s] = (c.types[s] || 0) + 1));
+  });
+  const name = (s) => (state.sources[s] ? (lang === "hi" ? state.sources[s].hi : state.sources[s].en) : s);
+  const isViol = (s) => state.sources[s] && state.sources[s].violation;
+  const list = Object.values(cl).sort((a, b) => (Object.keys(b.types).some(isViol) - Object.keys(a.types).some(isViol)) || b.n - a.n);
+  el.hidden = false;
+  if (!list.length) { el.innerHTML = `<div class="label caps">${t("hotTitle")}</div><p class="summary" style="margin:0">${t("hotEmpty")}</p>`; return; }
+  el.innerHTML = `<div class="label caps">${t("hotTitle")}</div><p class="small" style="margin:-4px 0 10px">${t("hotHelp")}</p>` +
+    list.slice(0, 6).map((c, i) => `<div class="src"><div class="rank">${i + 1}</div><div style="flex:1"><h4>${Object.keys(c.types).map((s) => esc(name(s))).join(", ")}</h4>
+      <div class="tags"><span class="tag">${t("hotReports", c.n)}</span>${Object.keys(c.types).some(isViol) ? `<span class="tag law">${t("law")}</span>` : ""}</div>
+      <p>${t("hotLast")}: ${new Date(c.last * 1000).toLocaleString(locale())} · <a href="https://maps.google.com/?q=${c.lat},${c.lon}" target="_blank" rel="noopener">${t("openMaps")}</a></p></div></div>`).join("") +
+    `<button class="btn" id="csvBtn" style="margin-top:8px">${icon("copy")}<span>${t("hotCsv")}</span></button>`;
+  $("#csvBtn").onclick = () => {
+    const rows = [["rank", "lat", "lon", "reports", "sources", "violation", "last_reported_ist", "map_link"]];
+    list.forEach((c, i) => rows.push([i + 1, c.lat, c.lon, c.n, Object.keys(c.types).map((s) => (state.sources[s] || {}).en || s).join("; "),
+      Object.keys(c.types).some(isViol) ? "yes" : "no", new Date(c.last * 1000).toLocaleString("en-IN"), `https://maps.google.com/?q=${c.lat},${c.lon}`]));
+    const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "saans-inspection-list.csv"; a.click();
   };
 }
 
@@ -589,6 +701,7 @@ async function loadMap() {
   });
   $("#mapStats").innerHTML = gridNote + fireNote + `<div class="glass"><b>${reports.length}</b><span>${t("reports")} · ${t("lastDays")}</span></div>` +
     ["burning", "dust", "industry", "traffic", "indoor"].filter((g) => counts[g]).map((g) => `<div class="glass"><b>${counts[g]}</b><span>${t(g === "indoor" ? "indoorOnly" : g)}</span></div>`).join("");
+  renderHotspots(reports);
 }
 
 hydrateIcons();

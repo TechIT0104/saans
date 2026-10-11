@@ -266,3 +266,7 @@ textarea { width: 100%; min-height: 230px; border: 0; border-radius: 14px; paddi
 .ph .src-bx span { background: #ffd60a; color: #1c1c1e; }
 
 .photos { align-items: start; }
+
+.report-card { display: block; width: 100%; border-radius: 16px; margin-top: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.15); }
+#hotspots a { color: var(--accent); text-decoration: none; font-weight: 500; }
+a.btn { text-decoration: none; }
