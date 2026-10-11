@@ -74,6 +74,23 @@ def _actions(ranked: list, aqi, has_indoor: bool, members: list, purifier: bool)
     return out
 
 
+def _complaint(ranked, violations, lat, lon, now) -> dict:
+    seen = [s for s in ranked if s.get("violation")]
+    what = "; ".join(f"{s['name_en']} ({s['evidence']})" for s in seen)
+    law = "\n".join(f"- {VIOLATIONS[v]}" for v in violations)
+    body = (
+        "To\nThe Municipal Commissioner / State Pollution Control Board\n\n"
+        f"Subject: Complaint about {', '.join(s['name_en'].lower() for s in seen)}\n\n"
+        "Respected Sir/Madam,\n\n"
+        f"On {now}, I observed the following at latitude {lat:.5f}, longitude {lon:.5f} "
+        f"(map: https://maps.google.com/?q={lat:.5f},{lon:.5f}): {what}. A photograph is attached as evidence.\n\n"
+        f"This is in violation of:\n{law}\n\n"
+        "Children and people with asthma live nearby and are directly exposed. I request an inspection of the site "
+        "and appropriate action under the applicable rules.\n\nYours faithfully,\nA resident (via Saans)"
+    )
+    return {"complaint_subject": f"Complaint: {seen[0]['name_en'].lower()} at {lat:.4f}, {lon:.4f}", "complaint_body": body}
+
+
 def _hindi_plan(ranked, air, indoor, actions) -> dict:
     cat = airmod.CATEGORIES_HI.get(air["now"]["category"], "") if air else ""
     aqi = air["now"]["aqi"] if air else None
@@ -173,6 +190,15 @@ async def api_scan(
             log.exception("plan llm")
     if lang == "hi":
         plan = {**(plan or {"complaint_subject": "", "complaint_body": ""}), **_hindi_plan(ranked, air, indoor, actions)}
+    if plan is None:
+        top = ranked[0]["name_en"] if ranked else None
+        todo = [a["en"] for a in actions if a.get("for") != "myth"][:2]
+        plan = {"headline": f"{top} is the biggest problem for your air right now." if top else
+                f"Your area's air is {air['now']['category'] if air else 'unknown'} today.",
+                "summary": " ".join(["First: " + todo[0]] + (["Then: " + todo[1]] if len(todo) > 1 else [])) if todo else "",
+                "complaint_subject": "", "complaint_body": ""}
+    if violations and not (plan.get("complaint_body") or "").strip():
+        plan.update(_complaint(ranked, violations, lat, lon, now))
 
     report = None
     if ranked:
